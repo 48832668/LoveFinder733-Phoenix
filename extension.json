@@ -1,0 +1,54 @@
+{
+	"name": "lovefinderseries-phoenix-component-swapper",
+	"uuid": "c3d4e5f678901234c5d6e7f890123456",
+	"displayName": "Phoenix-智能元件替换",
+	"description": "[LoveFinder733]智能元件替换助手，支持引脚映射、导线自动重连、网络标签附着，解决原版替换导线断开问题",
+	"version": "26.3.12",
+	"publisher": "LoveFinderSeries",
+	"engines": {
+		"eda": "^3.0.0"
+	},
+	"license": "Apache-2.0",
+	"repository": {
+		"type": "extension-store",
+		"url": "https://github.com/48832668/LoveFinder733-Phoenix"
+	},
+	"categories": "Schematic Design",
+	"keywords": [
+		"元件替换",
+		"Component",
+		"Replace",
+		"Swap",
+		"引脚映射",
+		"导线重连",
+		"原理图"
+	],
+	"images": {
+		"logo": "./images/logo.png"
+	},
+	"homepage": "https://github.com/48832668",
+	"bugs": "",
+	"activationEvents": {},
+	"entry": "./dist/index",
+	"dependentExtensions": {},
+	"headerMenus": {
+		"sch": [
+			{
+				"id": "phoenix-component-swapper",
+				"title": "元件替换",
+				"menuItems": [
+					{
+						"id": "openSwapper",
+						"title": "打开替换面板",
+						"registerFn": "openSwapperPanel"
+					},
+					{
+						"id": "quickReplace",
+						"title": "快速替换选中元件",
+						"registerFn": "quickReplaceComponent"
+					}
+				]
+			}
+		]
+	}
+}

@@ -1,0 +1,199 @@
+/**
+ * Phoenix - 智能元件替换
+ * 自定义样式（仅保留无法用 Bootstrap 5 实现的部分）
+ */
+
+:root {
+	--phoenix-primary: #ff6b35;
+	--phoenix-secondary: #f7931e;
+}
+
+/* 页面背景 */
+body {
+	background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+	min-height: 100vh;
+	font-size: 13px;
+}
+
+/* 头部渐变 */
+.phoenix-header {
+	background: linear-gradient(135deg, var(--phoenix-primary) 0%, var(--phoenix-secondary) 100%);
+}
+
+/* 火焰动画 */
+.phoenix-icon {
+	animation: flame 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes flame {
+	0% { transform: scale(1) rotate(-5deg); }
+	100% { transform: scale(1.1) rotate(5deg); }
+}
+
+/* 卡片透明背景 */
+.card {
+	background: rgba(255, 255, 255, 0.03);
+	border-color: rgba(255, 255, 255, 0.1);
+}
+
+.card-header {
+	background: rgba(255, 255, 255, 0.08);
+	border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* 表格透明 */
+.table {
+	color: #f8f9fa;
+}
+
+.table thead th {
+	background: rgba(255, 255, 255, 0.05);
+	border-color: rgba(255, 255, 255, 0.1);
+	color: var(--phoenix-secondary);
+	position: sticky;
+	top: 0;
+	z-index: 1;
+}
+
+.table tbody td {
+	border-color: rgba(255, 255, 255, 0.05);
+}
+
+.table-hover tbody tr:hover {
+	background: rgba(255, 107, 53, 0.1);
+}
+
+/* Phoenix 按钮 */
+.btn-phoenix {
+	background: linear-gradient(135deg, var(--phoenix-primary) 0%, var(--phoenix-secondary) 100%);
+	border: none;
+	color: white;
+}
+
+.btn-phoenix:hover:not(:disabled) {
+	background: linear-gradient(135deg, #e55a2b 0%, #e0841a 100%);
+	color: white;
+	box-shadow: 0 2px 8px rgba(255, 107, 53, 0.4);
+}
+
+.btn-outline-phoenix {
+	border-color: var(--phoenix-primary);
+	color: var(--phoenix-primary);
+}
+
+.btn-outline-phoenix:hover {
+	background: rgba(255, 107, 53, 0.1);
+	color: var(--phoenix-primary);
+	border-color: var(--phoenix-primary);
+}
+
+/* 表单透明 */
+.form-control {
+	background: rgba(255, 255, 255, 0.1);
+	border-color: rgba(255, 255, 255, 0.1);
+	color: #f8f9fa;
+}
+
+.form-control:focus {
+	background: rgba(255, 255, 255, 0.15);
+	border-color: var(--phoenix-primary);
+	color: #f8f9fa;
+	box-shadow: 0 0 0 0.2rem rgba(255, 107, 53, 0.25);
+}
+
+.form-control::placeholder {
+	color: rgba(255, 255, 255, 0.4);
+}
+
+/* 模态框暗色 */
+.modal-content {
+	background: #1a1a2e;
+	border-color: rgba(255, 255, 255, 0.1);
+}
+
+.modal-header {
+	background: rgba(255, 255, 255, 0.05);
+	border-color: rgba(255, 255, 255, 0.1);
+	color: #f8f9fa;
+}
+
+.modal-body, .modal-footer {
+	color: #f8f9fa;
+	border-color: rgba(255, 255, 255, 0.1);
+}
+
+.btn-close {
+	filter: invert(1);
+}
+
+/* 折叠面板 */
+.accordion-button {
+	background: rgba(255, 255, 255, 0.05);
+	color: #f8f9fa;
+}
+
+.accordion-button:not(.collapsed) {
+	background: rgba(255, 255, 255, 0.08);
+	color: var(--phoenix-secondary);
+}
+
+.accordion-button:focus {
+	box-shadow: 0 0 0 0.2rem rgba(255, 107, 53, 0.25);
+}
+
+.accordion-item {
+	background: transparent;
+	border-color: rgba(255, 255, 255, 0.1);
+}
+
+.accordion-body {
+	background: rgba(0, 0, 0, 0.2);
+	color: #f8f9fa;
+}
+
+/* 调试日志 */
+.debug-log {
+	background: rgba(0, 0, 0, 0.5);
+	font-family: 'Consolas', 'Monaco', monospace;
+	font-size: 11px;
+	line-height: 1.5;
+}
+
+.debug-log-entry.info { color: #f8f9fa; }
+.debug-log-entry.success { color: #198754; }
+.debug-log-entry.warning { color: #ffc107; }
+.debug-log-entry.error { color: #dc3545; }
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--phoenix-primary); border-radius: 3px; }
+
+/* 选中行 */
+.selected-row {
+	background: rgba(255, 107, 53, 0.25) !important;
+	border-left: 3px solid var(--phoenix-primary);
+}
+
+.highlight-row {
+	background: rgba(255, 107, 53, 0.15) !important;
+}
+
+/* 匹配类型标签 */
+.match-badge { font-size: 10px; padding: 2px 6px; border-radius: 3px; }
+.match-exact { background: #198754; color: white; }
+.match-name { background: #ffc107; color: #212529; }
+.match-manual { background: #dc3545; color: white; }
+
+/* 加载动画 */
+.loading-spinner {
+	display: inline-block;
+	width: 20px;
+	height: 20px;
+	border: 2px solid rgba(255, 255, 255, 0.3);
+	border-radius: 50%;
+	border-top-color: var(--phoenix-primary);
+	animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
