@@ -25,6 +25,7 @@
 		"eslint-config-alloy": "^5.1.2",
 		"eslint-plugin-tsdoc": "^0.4.0",
 		"fs-extra": "^11.3.0",
+		"graceful-fs": "^4.2.11",
 		"husky": "^9.1.7",
 		"ignore": "^7.0.3",
 		"jszip": "^3.10.1",

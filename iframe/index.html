@@ -1,263 +1,334 @@
 <!doctype html>
 <html lang="zh-Hans">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Phoenix - 智能元件替换</title>
+		<link rel="stylesheet" href="/iframe/css/bootstrap.min.css" />
+		<link rel="stylesheet" href="/iframe/css/style.css" />
+	</head>
 
-<head>
-	<meta charset="utf-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<title>Phoenix - 智能元件替换</title>
-	<link rel="stylesheet" href="/iframe/css/bootstrap.min.css" />
-	<link rel="stylesheet" href="/iframe/css/style.css" />
-</head>
+	<body class="text-light">
+		<!-- 头部 -->
+		<div class="phoenix-header d-flex align-items-center gap-2 px-3 py-2">
+			<i class="bi bi-fire phoenix-icon fs-4"></i>
+			<h5 class="mb-0 fw-semibold text-white">Phoenix - 智能元件替换</h5>
+		</div>
 
-<body class="text-light">
-	<!-- 头部 -->
-	<div class="phoenix-header d-flex align-items-center gap-2 px-3 py-2">
-		<i class="bi bi-fire phoenix-icon fs-4"></i>
-		<h5 class="mb-0 fw-semibold text-white">Phoenix - 智能元件替换</h5>
-	</div>
-
-	<!-- 主体内容 -->
-	<div class="container-fluid p-2">
-		<!-- 上方三栏布局 -->
-		<div class="row g-2 mb-2">
-			<!-- 左侧：元件列表 -->
-			<div class="col-md-5">
-				<div class="card h-100">
-					<div class="card-header d-flex justify-content-between align-items-center py-1">
-						<span><i class="bi bi-list-ul"></i> 元件列表</span>
-						<span class="badge bg-secondary" id="totalCount">0</span>
-					</div>
-					<div class="card-body p-2">
-						<div class="mb-2">
-							<input type="text" class="form-control form-control-sm" id="filterInput" placeholder="筛选元件..." />
+		<!-- 主体内容 -->
+		<div class="container-fluid p-2">
+			<!-- 上方三栏布局 -->
+			<div class="row g-2 mb-2">
+				<!-- 左侧：元件列表 -->
+				<div class="col-md-5">
+					<div class="card h-100">
+						<div class="card-header d-flex justify-content-between align-items-center py-1">
+							<span><i class="bi bi-list-ul"></i> 元件列表</span>
+							<span class="badge bg-secondary" id="totalCount">0</span>
 						</div>
-						<div class="table-container" style="max-height: 200px; overflow-y: auto;">
-							<table class="table table-sm table-hover mb-0">
+						<div class="card-body p-2">
+							<div class="mb-2">
+								<input type="text" class="form-control form-control-sm" id="filterInput" placeholder="筛选元件..." />
+							</div>
+							<div class="table-container" style="max-height: 200px; overflow-y: auto">
+								<table class="table table-sm table-hover mb-0">
+									<thead>
+										<tr>
+											<th class="py-1" style="width: 80px">位号</th>
+											<th class="py-1">元件型号</th>
+											<th class="py-1" style="width: 100px">封装</th>
+											<th class="py-1 text-center" style="width: 40px">
+												<input type="checkbox" class="form-check-input" id="selectAll" title="全选" />
+											</th>
+										</tr>
+									</thead>
+									<tbody id="componentListBody">
+										<tr>
+											<td colspan="4" class="text-center text-muted">点击"刷新列表"加载元件</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<!-- 中间：已选中元件列表 -->
+				<div class="col-md-3">
+					<div class="card h-100">
+						<div class="card-header d-flex justify-content-between align-items-center py-1">
+							<span><i class="bi bi-check-circle"></i> 已选中</span>
+							<span class="badge bg-warning text-dark" id="selectedCount">0</span>
+						</div>
+						<div class="card-body p-2">
+							<div class="table-container" style="max-height: 200px; overflow-y: auto">
+								<table class="table table-sm table-hover mb-0">
+									<thead>
+										<tr>
+											<th class="py-1" style="width: 70px">位号</th>
+											<th class="py-1">型号</th>
+											<th class="py-1 text-center" style="width: 40px">操作</th>
+										</tr>
+									</thead>
+									<tbody id="selectedListBody">
+										<tr>
+											<td colspan="3" class="text-center text-muted">暂无选中</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<!-- 右侧：信息对比表格 -->
+				<div class="col-md-4">
+					<div class="card h-100">
+						<div class="card-header py-1">
+							<span><i class="bi bi-diagram-3"></i> 属性对比</span>
+						</div>
+						<div class="card-body p-2">
+							<table class="table table-sm mb-0">
 								<thead>
 									<tr>
-										<th class="py-1" style="width: 80px">位号</th>
-										<th class="py-1">元件型号</th>
+										<th class="py-1" style="width: 80px">属性</th>
+										<th class="py-1">原值</th>
+										<th class="py-1">目标值</th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr>
+										<td>型号</td>
+										<td class="text-muted" id="oldModel">-</td>
+										<td class="text-warning" id="newModel">-</td>
+									</tr>
+									<tr>
+										<td>封装</td>
+										<td class="text-muted" id="oldFootprint">-</td>
+										<td class="text-warning" id="newFootprint">-</td>
+									</tr>
+									<tr>
+										<td>引脚数</td>
+										<td class="text-muted" id="oldPins">-</td>
+										<td class="text-warning" id="newPins">-</td>
+									</tr>
+									<tr>
+										<td>制造商</td>
+										<td class="text-muted" id="oldManufacturer">-</td>
+										<td class="text-warning" id="newManufacturer">-</td>
+									</tr>
+									<tr>
+										<td>价格</td>
+										<td class="text-muted" id="oldPrice">-</td>
+										<td id="newPriceCell">
+											<span id="newPrice" class="text-warning">-</span>
+											<span id="priceChange" class="ms-1"></span>
+										</td>
+									</tr>
+									<tr>
+										<td>库存</td>
+										<td class="text-muted" id="oldInventory">-</td>
+										<td class="text-warning" id="newInventory">-</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- 操作栏 -->
+			<div class="d-flex justify-content-between align-items-center py-2 border-top border-secondary">
+				<div class="d-flex gap-2">
+					<button class="btn btn-outline-phoenix btn-sm" id="refreshBtn"><i class="bi bi-arrow-clockwise"></i> 刷新列表</button>
+					<button class="btn btn-outline-secondary btn-sm" id="clearSelectionBtn"><i class="bi bi-x-circle"></i> 清空选择</button>
+				</div>
+				<div>
+					<button class="btn btn-phoenix" id="selectNewComponentBtn" disabled><i class="bi bi-search"></i> 选择新元件</button>
+				</div>
+				<div>
+					<button class="btn btn-success btn-sm" id="executeReplaceBtn" disabled><i class="bi bi-check-lg"></i> 执行替换</button>
+				</div>
+			</div>
+
+			<!-- 调试日志面板 -->
+			<div class="accordion mt-2">
+				<div class="accordion-item">
+					<h2 class="accordion-header">
+						<button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#debugCollapse">
+							<i class="bi bi-bug me-2"></i> 调试日志
+						</button>
+					</h2>
+					<div id="debugCollapse" class="accordion-collapse collapse">
+						<div class="accordion-body py-2">
+							<div class="mb-2">
+								<button class="btn btn-sm btn-outline-secondary" id="clearLogBtn">清空日志</button>
+							</div>
+							<div class="debug-log p-2 rounded" style="max-height: 150px; overflow-y: auto" id="debugLog"></div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- 新元件搜索模态框 -->
+		<div class="modal fade" id="searchModal" tabindex="-1">
+			<div class="modal-dialog modal-xl">
+				<div class="modal-content">
+					<div class="modal-header">
+						<h5 class="modal-title"><i class="bi bi-search"></i> 搜索新元件</h5>
+						<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+					</div>
+					<div class="modal-body">
+						<!-- 搜索输入区 -->
+						<div class="row mb-3">
+							<div class="col-md-8">
+								<div class="input-group">
+									<input type="text" class="form-control" id="newComponentSearch" placeholder="输入元件名称或型号搜索..." />
+									<button class="btn btn-phoenix" type="button" id="searchBtn"><i class="bi bi-search"></i> 搜索</button>
+								</div>
+							</div>
+							<div class="col-md-4">
+								<button class="btn btn-outline-secondary w-100" type="button" id="clearSearchBtn">
+									<i class="bi bi-x-circle"></i> 清空结果
+								</button>
+							</div>
+						</div>
+
+						<!-- 排序和筛选区 -->
+						<div class="row mb-3 align-items-center">
+							<div class="col-md-6">
+								<div class="btn-group" role="group">
+									<span class="btn btn-sm btn-outline-secondary disabled">排序:</span>
+									<button type="button" class="btn btn-sm btn-outline-phoenix active" id="sortPriceBtn" data-sort="price-asc">
+										<i class="bi bi-currency-yen"></i> 价格 <i class="bi bi-arrow-up"></i>
+									</button>
+									<button type="button" class="btn btn-sm btn-outline-secondary" id="sortInventoryBtn" data-sort="inventory-desc">
+										<i class="bi bi-box"></i> 库存
+									</button>
+									<button type="button" class="btn btn-sm btn-outline-secondary" id="sortPinsBtn" data-sort="pins-asc">
+										<i class="bi bi-pin"></i> 引脚
+									</button>
+								</div>
+							</div>
+							<div class="col-md-3">
+								<select class="form-select form-select-sm" id="filterManufacturer">
+									<option value="">所有制造商</option>
+								</select>
+							</div>
+							<div class="col-md-3">
+								<select class="form-select form-select-sm" id="filterFootprint">
+									<option value="">所有封装</option>
+								</select>
+							</div>
+						</div>
+
+						<!-- 搜索结果统计 -->
+						<div class="d-flex justify-content-between align-items-center mb-2">
+							<span class="text-muted small">找到 <span id="searchResultCount">0</span> 个结果</span>
+							<span class="text-muted small">最低价: <span id="lowestPrice" class="text-success fw-bold">-</span></span>
+						</div>
+
+						<!-- 搜索结果表格 -->
+						<div style="max-height: 350px; overflow-y: auto">
+							<table class="table table-sm table-hover mb-0">
+								<thead class="sticky-top bg-dark">
+									<tr>
+										<th class="py-1" style="width: 180px">型号</th>
 										<th class="py-1" style="width: 100px">封装</th>
-										<th class="py-1 text-center" style="width: 40px">
-											<input type="checkbox" class="form-check-input" id="selectAll" title="全选" />
-										</th>
+										<th class="py-1" style="width: 80px">价格</th>
+										<th class="py-1" style="width: 70px">库存</th>
+										<th class="py-1" style="width: 80px">制造商</th>
+										<th class="py-1">描述</th>
+										<th class="py-1" style="width: 50px"></th>
 									</tr>
 								</thead>
-								<tbody id="componentListBody">
+								<tbody id="searchResultsBody">
 									<tr>
-										<td colspan="4" class="text-center text-muted">点击"刷新列表"加载元件</td>
+										<td colspan="7" class="text-center text-muted">输入关键词搜索元件</td>
 									</tr>
 								</tbody>
 							</table>
 						</div>
+
+						<!-- 已选元件信息 -->
+						<div class="mt-3 p-2 bg-secondary bg-opacity-25 rounded" id="selectedInfo" style="display: none">
+							<div class="row align-items-center">
+								<div class="col-md-8">
+									<strong>已选:</strong> <span id="selectedName">-</span>
+									<span class="ms-3"><i class="bi bi-box"></i> <span id="selectedFootprint">-</span></span>
+									<span class="ms-3"
+										><i class="bi bi-currency-yen"></i> <span id="selectedPrice" class="text-success fw-bold">-</span></span
+									>
+									<span class="ms-3"><i class="bi bi-pin"></i> <span id="selectedPins">-</span> 引脚</span>
+								</div>
+								<div class="col-md-4 text-end">
+									<button class="btn btn-sm btn-outline-warning" id="clearSelectedBtn"><i class="bi bi-x"></i> 取消选择</button>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+						<button type="button" class="btn btn-phoenix" id="confirmNewComponentBtn" disabled>
+							<i class="bi bi-check-lg"></i> 确认选择
+						</button>
 					</div>
 				</div>
 			</div>
+		</div>
 
-			<!-- 中间：已选中元件列表 -->
-			<div class="col-md-3">
-				<div class="card h-100">
-					<div class="card-header d-flex justify-content-between align-items-center py-1">
-						<span><i class="bi bi-check-circle"></i> 已选中</span>
-						<span class="badge bg-warning text-dark" id="selectedCount">0</span>
+		<!-- 引脚映射模态框 -->
+		<div class="modal fade" id="pinMappingModal" tabindex="-1">
+			<div class="modal-dialog modal-xl">
+				<div class="modal-content">
+					<div class="modal-header">
+						<h5 class="modal-title"><i class="bi bi-diagram-2"></i> 引脚映射确认</h5>
+						<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
 					</div>
-					<div class="card-body p-2">
-						<div class="table-container" style="max-height: 200px; overflow-y: auto;">
-							<table class="table table-sm table-hover mb-0">
+					<div class="modal-body">
+						<div style="max-height: 400px; overflow-y: auto">
+							<table class="table table-sm mb-0">
 								<thead>
 									<tr>
-										<th class="py-1" style="width: 70px">位号</th>
-										<th class="py-1">型号</th>
-										<th class="py-1 text-center" style="width: 40px">操作</th>
+										<th class="py-1">原引脚</th>
+										<th class="py-1">原引脚名称</th>
+										<th class="py-1">网络</th>
+										<th class="py-1">→</th>
+										<th class="py-1">新引脚</th>
+										<th class="py-1">新引脚名称</th>
+										<th class="py-1">匹配类型</th>
 									</tr>
 								</thead>
-								<tbody id="selectedListBody">
-									<tr>
-										<td colspan="3" class="text-center text-muted">暂无选中</td>
-									</tr>
-								</tbody>
+								<tbody id="pinMappingBody"></tbody>
 							</table>
 						</div>
 					</div>
-				</div>
-			</div>
-
-			<!-- 右侧：信息对比表格 -->
-			<div class="col-md-4">
-				<div class="card h-100">
-					<div class="card-header py-1">
-						<span><i class="bi bi-diagram-3"></i> 属性对比</span>
-					</div>
-					<div class="card-body p-2">
-						<table class="table table-sm mb-0">
-							<thead>
-								<tr>
-									<th class="py-1" style="width: 80px">属性</th>
-									<th class="py-1">原值</th>
-									<th class="py-1">目标值</th>
-								</tr>
-							</thead>
-							<tbody>
-								<tr>
-									<td>型号</td>
-									<td class="text-muted" id="oldModel">-</td>
-									<td class="text-warning" id="newModel">-</td>
-								</tr>
-								<tr>
-									<td>封装</td>
-									<td class="text-muted" id="oldFootprint">-</td>
-									<td class="text-warning" id="newFootprint">-</td>
-								</tr>
-								<tr>
-									<td>引脚数</td>
-									<td class="text-muted" id="oldPins">-</td>
-									<td class="text-warning" id="newPins">-</td>
-								</tr>
-								<tr>
-									<td>制造商</td>
-									<td class="text-muted" id="oldManufacturer">-</td>
-									<td class="text-warning" id="newManufacturer">-</td>
-								</tr>
-							</tbody>
-						</table>
+					<div class="modal-footer">
+						<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+						<button type="button" class="btn btn-success" id="confirmReplaceBtn">确认替换</button>
 					</div>
 				</div>
 			</div>
 		</div>
 
-		<!-- 操作栏 -->
-		<div class="d-flex justify-content-between align-items-center py-2 border-top border-secondary">
-			<div class="d-flex gap-2">
-				<button class="btn btn-outline-phoenix btn-sm" id="refreshBtn">
-					<i class="bi bi-arrow-clockwise"></i> 刷新列表
-				</button>
-				<button class="btn btn-outline-secondary btn-sm" id="clearSelectionBtn">
-					<i class="bi bi-x-circle"></i> 清空选择
-				</button>
-			</div>
-			<div>
-				<button class="btn btn-phoenix" id="selectNewComponentBtn" disabled>
-					<i class="bi bi-search"></i> 选择新元件
-				</button>
-			</div>
-			<div>
-				<button class="btn btn-success btn-sm" id="executeReplaceBtn" disabled>
-					<i class="bi bi-check-lg"></i> 执行替换
-				</button>
-			</div>
-		</div>
-
-		<!-- 调试日志面板 -->
-		<div class="accordion mt-2">
-			<div class="accordion-item">
-				<h2 class="accordion-header">
-					<button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#debugCollapse">
-						<i class="bi bi-bug me-2"></i> 调试日志
-					</button>
-				</h2>
-				<div id="debugCollapse" class="accordion-collapse collapse">
-					<div class="accordion-body py-2">
-						<div class="mb-2">
-							<button class="btn btn-sm btn-outline-secondary" id="clearLogBtn">清空日志</button>
-						</div>
-						<div class="debug-log p-2 rounded" style="max-height: 150px; overflow-y: auto;" id="debugLog"></div>
+		<!-- 结果提示模态框 -->
+		<div class="modal fade" id="resultModal" tabindex="-1">
+			<div class="modal-dialog">
+				<div class="modal-content">
+					<div class="modal-header">
+						<h5 class="modal-title" id="resultTitle">替换结果</h5>
+						<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+					</div>
+					<div class="modal-body" id="resultBody"></div>
+					<div class="modal-footer">
+						<button type="button" class="btn btn-phoenix" data-bs-dismiss="modal">确定</button>
 					</div>
 				</div>
 			</div>
 		</div>
-	</div>
 
-	<!-- 新元件搜索模态框 -->
-	<div class="modal fade" id="searchModal" tabindex="-1">
-		<div class="modal-dialog modal-lg">
-			<div class="modal-content">
-				<div class="modal-header">
-					<h5 class="modal-title"><i class="bi bi-search"></i> 搜索新元件</h5>
-					<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-				</div>
-				<div class="modal-body">
-					<div class="mb-3">
-						<input type="text" class="form-control" id="newComponentSearch" placeholder="输入元件名称或型号搜索..." />
-					</div>
-					<div style="max-height: 300px; overflow-y: auto;">
-						<table class="table table-sm table-hover mb-0">
-							<thead>
-								<tr>
-									<th class="py-1">型号</th>
-									<th class="py-1">封装</th>
-									<th class="py-1">制造商</th>
-									<th class="py-1">描述</th>
-									<th class="py-1" style="width: 60px"></th>
-								</tr>
-							</thead>
-							<tbody id="searchResultsBody">
-								<tr>
-									<td colspan="5" class="text-center text-muted">输入关键词搜索元件</td>
-								</tr>
-							</tbody>
-						</table>
-					</div>
-				</div>
-				<div class="modal-footer">
-					<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-					<button type="button" class="btn btn-phoenix" id="confirmNewComponentBtn" disabled>确认选择</button>
-				</div>
-			</div>
-		</div>
-	</div>
-
-	<!-- 引脚映射模态框 -->
-	<div class="modal fade" id="pinMappingModal" tabindex="-1">
-		<div class="modal-dialog modal-xl">
-			<div class="modal-content">
-				<div class="modal-header">
-					<h5 class="modal-title"><i class="bi bi-diagram-2"></i> 引脚映射确认</h5>
-					<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-				</div>
-				<div class="modal-body">
-					<div style="max-height: 400px; overflow-y: auto;">
-						<table class="table table-sm mb-0">
-							<thead>
-								<tr>
-									<th class="py-1">原引脚</th>
-									<th class="py-1">原引脚名称</th>
-									<th class="py-1">网络</th>
-									<th class="py-1">→</th>
-									<th class="py-1">新引脚</th>
-									<th class="py-1">新引脚名称</th>
-									<th class="py-1">匹配类型</th>
-								</tr>
-							</thead>
-							<tbody id="pinMappingBody"></tbody>
-						</table>
-					</div>
-				</div>
-				<div class="modal-footer">
-					<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-					<button type="button" class="btn btn-success" id="confirmReplaceBtn">确认替换</button>
-				</div>
-			</div>
-		</div>
-	</div>
-
-	<!-- 结果提示模态框 -->
-	<div class="modal fade" id="resultModal" tabindex="-1">
-		<div class="modal-dialog">
-			<div class="modal-content">
-				<div class="modal-header">
-					<h5 class="modal-title" id="resultTitle">替换结果</h5>
-					<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-				</div>
-				<div class="modal-body" id="resultBody"></div>
-				<div class="modal-footer">
-					<button type="button" class="btn btn-phoenix" data-bs-dismiss="modal">确定</button>
-				</div>
-			</div>
-		</div>
-	</div>
-
-	<script src="/iframe/js/bootstrap.bundle.min.js"></script>
-	<script src="/dist/iframe/app.js"></script>
-</body>
-
+		<script src="/iframe/js/bootstrap.bundle.min.js"></script>
+		<script src="/dist/iframe/app.js"></script>
+	</body>
 </html>

@@ -5,10 +5,10 @@
  * 解决原版替换导线断开问题
  */
 import * as extensionConfig from '../extension.json';
-import { DataLoader, dataLoader } from './core/data-loader';
-import type { PinMapping } from './core/types';
 import { componentAnalyzer } from './core/component-analyzer';
+import { DataLoader } from './core/data-loader';
 import { pinMapper } from './core/pin-mapper';
+import type { PinMapping } from './core/types';
 import { wireReconnector } from './core/wire-reconnector';
 
 // 状态管理
@@ -17,7 +17,7 @@ let isPanelOpen = false;
 /**
  * 导出激活函数
  */
-export function activate(_status?: 'onStartupFinished', _arg?: string): void {
+export function activate(): void {
 	// 插件激活
 }
 
@@ -30,22 +30,16 @@ export function openSwapperPanel(): void {
 		return;
 	}
 
-	eda.sys_IFrame.openIFrame(
-		'/iframe/index.html',
-		900,
-		500,
-		'phoenix-swapper-panel',
-		{
-			maximizeButton: true,
-			minimizeButton: true,
-			grayscaleMask: false,
-			buttonCallbackFn: (button: 'close' | 'minimize' | 'maximize') => {
-				if (button === 'close') {
-					isPanelOpen = false;
-				}
-			},
+	eda.sys_IFrame.openIFrame('/iframe/index.html', 900, 500, 'phoenix-swapper-panel', {
+		maximizeButton: true,
+		minimizeButton: true,
+		grayscaleMask: false,
+		buttonCallbackFn: (button: 'close' | 'minimize' | 'maximize') => {
+			if (button === 'close') {
+				isPanelOpen = false;
+			}
 		},
-	);
+	});
 
 	isPanelOpen = true;
 }
@@ -80,29 +74,31 @@ export async function getAllComponents(): Promise<{
 /**
  * 搜索元件（供前端调用）
  */
-export async function searchComponents(keyword: string): Promise<Array<{
-	uuid: string;
-	libraryUuid: string;
-	name: string;
-	footprint?: string;
-	manufacturer?: string;
-	description?: string;
-	pinCount?: number;
-}>> {
+export async function searchComponents(keyword: string): Promise<
+	Array<{
+		uuid: string;
+		libraryUuid: string;
+		name: string;
+		footprint?: string;
+		manufacturer?: string;
+		description?: string;
+		pinCount?: number;
+	}>
+> {
 	if (!keyword || keyword.trim() === '') {
 		return [];
 	}
 
 	try {
-		const results = await eda.lib_Device.search({
-			keyword: keyword.trim(),
-		});
+		// API: lib_Device.search(key, libraryUuid?, classification?, symbolType?, itemsOfPage?, page?)
+		// 第一个参数是字符串 key
+		const results = await eda.lib_Device.search(keyword.trim());
 
 		if (!results || results.length === 0) {
 			return [];
 		}
 
-		return results.slice(0, 50).map(r => ({
+		return results.slice(0, 50).map((r) => ({
 			uuid: r.uuid,
 			libraryUuid: r.libraryUuid ?? '',
 			name: r.name ?? '',
@@ -111,8 +107,7 @@ export async function searchComponents(keyword: string): Promise<Array<{
 			description: r.description,
 			pinCount: r.pinCount,
 		}));
-	}
-	catch (error) {
+	} catch (error) {
 		console.error('搜索元件失败:', error);
 		return [];
 	}
@@ -127,11 +122,12 @@ export async function analyzePinMappings(
 		designator: string;
 		name: string;
 	}>,
-	newDeviceInfo: {
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	_newDeviceInfo: {
 		uuid: string;
 		libraryUuid: string;
 		name: string;
-	}
+	},
 ): Promise<{
 	success: boolean;
 	mappings: PinMapping[];
@@ -155,7 +151,7 @@ export async function analyzePinMappings(
 		const mappings: PinMapping[] = [];
 
 		for (const oldPin of oldPins) {
-			const connection = wireConnections.find(c => c.pinNumber === oldPin.pinNumber);
+			const connection = wireConnections.find((c) => c.pinNumber === oldPin.pinNumber);
 
 			mappings.push({
 				oldPinNumber: oldPin.pinNumber,
@@ -174,8 +170,7 @@ export async function analyzePinMappings(
 			success: true,
 			mappings,
 		};
-	}
-	catch (error) {
+	} catch (error) {
 		return {
 			success: false,
 			mappings: [],
@@ -199,7 +194,7 @@ export async function executeBatchReplace(
 		uuid: string;
 		libraryUuid: string;
 		name: string;
-	}
+	},
 ): Promise<{
 	success: boolean;
 	message: string;
@@ -228,17 +223,10 @@ export async function executeBatchReplace(
 	}
 
 	try {
-		eda.sys_Message.showToastMessage(
-			`正在替换 ${selectedComponents.length} 个元件...`,
-			ESYS_ToastMessageType.INFO,
-			5
-		);
+		eda.sys_Message.showToastMessage(`正在替换 ${selectedComponents.length} 个元件...`, ESYS_ToastMessageType.INFO, 5);
 
 		// 获取器件文件
-		const deviceFile = await eda.sys_FileManager.getDeviceFileByDeviceUuid(
-			newDeviceInfo.uuid,
-			newDeviceInfo.libraryUuid
-		);
+		const deviceFile = await eda.sys_FileManager.getDeviceFileByDeviceUuid(newDeviceInfo.uuid, newDeviceInfo.libraryUuid);
 
 		if (!deviceFile) {
 			result.success = false;
@@ -271,14 +259,7 @@ export async function executeBatchReplace(
 				const allWires = await componentAnalyzer.getAllWires();
 
 				// 创建新元件
-				const newComponent = await eda.sch_PrimitiveComponent.create(
-					deviceFile,
-					x,
-					y,
-					undefined,
-					rotation,
-					mirror
-				);
+				const newComponent = await eda.sch_PrimitiveComponent.create(deviceFile, x, y, undefined, rotation, mirror);
 
 				if (!newComponent) {
 					result.details.push(`${oldComp.designator}: 创建新元件失败`);
@@ -308,8 +289,7 @@ export async function executeBatchReplace(
 				await eda.sch_PrimitiveComponent.delete(oldComp.primitiveId);
 
 				result.details.push(`${oldComp.designator}: 替换成功`);
-			}
-			catch (e) {
+			} catch (e) {
 				result.details.push(`${oldComp.designator}: 替换失败 - ${e}`);
 				result.failedWires++;
 			}
@@ -318,13 +298,8 @@ export async function executeBatchReplace(
 		result.message = `替换完成: ${selectedComponents.length} 个元件, ${result.reconnectedWires} 根导线重连`;
 		result.success = result.failedWires === 0;
 
-		eda.sys_Message.showToastMessage(
-			result.message,
-			result.success ? ESYS_ToastMessageType.SUCCESS : ESYS_ToastMessageType.WARNING,
-			5
-		);
-	}
-	catch (error) {
+		eda.sys_Message.showToastMessage(result.message, result.success ? ESYS_ToastMessageType.SUCCESS : ESYS_ToastMessageType.WARNING, 5);
+	} catch (error) {
 		result.success = false;
 		result.message = `替换失败: ${error}`;
 		eda.sys_Message.showToastMessage(result.message, ESYS_ToastMessageType.ERROR, 5);
@@ -339,12 +314,12 @@ export async function executeBatchReplace(
 export function about(): void {
 	eda.sys_Dialog.showInformationMessage(
 		`Phoenix - 智能元件替换 v${extensionConfig.version}\n\n` +
-		'功能：智能元件替换助手\n' +
-		'• 引脚自动映射\n' +
-		'• 导线自动重连\n' +
-		'• 网络标签附着\n' +
-		'• 批量替换支持\n\n' +
-		'LoveFinderSeries NO.733',
+			'功能：智能元件替换助手\n' +
+			'• 引脚自动映射\n' +
+			'• 导线自动重连\n' +
+			'• 网络标签附着\n' +
+			'• 批量替换支持\n\n' +
+			'LoveFinderSeries NO.733',
 		'关于 Phoenix',
 	);
 }

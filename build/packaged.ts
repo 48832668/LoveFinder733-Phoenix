@@ -82,9 +82,24 @@ function main() {
 		zip.file(file, fs.createReadStream(__dirname + '/../' + file));
 	}
 
-	zip.generateNodeStream({ type: 'nodebuffer', streamFiles: true }).pipe(
-		fs.createWriteStream(__dirname + '/dist/' + extensionConfig.name + '_v' + extensionConfig.version + '.eext'),
-	);
+	// 确保 build/dist 目录存在
+	const distDir = __dirname + '/dist';
+	if (!fs.existsSync(distDir)) {
+		fs.mkdirSync(distDir, { recursive: true });
+	}
+
+	const outputPath = distDir + '/' + extensionConfig.name + '_v' + extensionConfig.version + '.eext';
+
+	zip.generateNodeStream({ type: 'nodebuffer', streamFiles: true })
+		.pipe(fs.createWriteStream(outputPath))
+		.on('finish', () => {
+			console.log('Build completed: ' + outputPath);
+			process.exit(0);
+		})
+		.on('error', (err: Error) => {
+			console.error('Build failed:', err);
+			process.exit(1);
+		});
 }
 
 main();

@@ -1,5 +1,5 @@
-import process from 'node:process';
 import esbuild from 'esbuild';
+import process from 'node:process';
 
 import common, { iframeConfig } from './esbuild.common';
 
@@ -10,10 +10,12 @@ import common, { iframeConfig } from './esbuild.common';
 	if (process.argv.includes('--watch')) {
 		await ctx.watch();
 		await iframeCtx.watch();
-	}
-	else {
+	} else {
 		await ctx.rebuild();
 		await iframeCtx.rebuild();
-		process.exit();
+		// 释放资源，避免文件句柄泄漏
+		await ctx.dispose();
+		await iframeCtx.dispose();
+		process.exit(0);
 	}
 })();

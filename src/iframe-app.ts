@@ -3,7 +3,8 @@
  * 前端应用逻辑
  */
 
-// 类型定义
+// ==================== 类型定义 ====================
+
 interface ComponentItem {
 	primitiveId: string;
 	designator: string;
@@ -23,6 +24,12 @@ interface SearchResult {
 	manufacturer?: string;
 	description?: string;
 	pinCount?: number;
+	jlcPrice?: number;
+	lcscPrice?: number;
+	jlcInventory?: number;
+	lcscInventory?: number;
+	supplier?: string;
+	supplierId?: string;
 }
 
 interface PinMapping {
@@ -34,11 +41,19 @@ interface PinMapping {
 	matchType: 'exact' | 'name' | 'manual';
 }
 
-// 全局状态
+type SortType = 'price-asc' | 'price-desc' | 'inventory-desc' | 'inventory-asc' | 'pins-asc' | 'pins-desc';
+
+// ==================== 全局状态 ====================
+
 let allComponents: ComponentItem[] = [];
 let selectedComponents: ComponentItem[] = [];
 let selectedNewComponent: SearchResult | null = null;
 let currentPinMappings: PinMapping[] = [];
+
+// 搜索相关状态
+let searchResults: SearchResult[] = [];
+let filterManufacturer = '';
+let filterFootprint = '';
 
 // Bootstrap 模态框实例
 let searchModal: bootstrap.Modal | null = null;
@@ -58,18 +73,6 @@ const DebugLog = {
 		this.logElement = document.getElementById('debugLog');
 		this.log('info', '调试日志初始化完成');
 		this.log('info', `EDA对象存在: ${edaApi ? '是' : '否'}`);
-		this.log('info', `window.eda存在: ${typeof (window as any).eda !== 'undefined' ? '是' : '否'}`);
-		this.log('info', `window.parent.eda存在: ${typeof (window.parent as any)?.eda !== 'undefined' ? '是' : '否'}`);
-		this.log('info', `window.top.eda存在: ${typeof (window.top as any)?.eda !== 'undefined' ? '是' : '否'}`);
-		
-		// 检查 eda 的关键属性
-		if (edaApi) {
-			this.log('info', `eda.sys_IFrame存在: ${typeof edaApi.sys_IFrame !== 'undefined' ? '是' : '否'}`);
-			this.log('info', `eda.sys_Message存在: ${typeof edaApi.sys_Message !== 'undefined' ? '是' : '否'}`);
-			this.log('info', `eda.sch_PrimitiveComponent存在: ${typeof edaApi.sch_PrimitiveComponent !== 'undefined' ? '是' : '否'}`);
-			this.log('info', `eda.dmt_SelectControl存在: ${typeof edaApi.dmt_SelectControl !== 'undefined' ? '是' : '否'}`);
-			this.log('info', `eda.dmt_Schematic存在: ${typeof edaApi.dmt_Schematic !== 'undefined' ? '是' : '否'}`);
-		}
 	},
 
 	log(level: 'info' | 'success' | 'warning' | 'error', message: string): void {
@@ -85,36 +88,37 @@ const DebugLog = {
 			this.logElement.scrollTop = this.logElement.scrollHeight;
 		}
 
-		// 同时输出到控制台
 		console.log(`[Phoenix ${level.toUpperCase()}] ${message}`);
 	},
 
-	info(message: string): void { this.log('info', message); },
-	success(message: string): void { this.log('success', message); },
-	warning(message: string): void { this.log('warning', message); },
-	error(message: string): void { this.log('error', message); },
+	info(message: string): void {
+		this.log('info', message);
+	},
+	success(message: string): void {
+		this.log('success', message);
+	},
+	warning(message: string): void {
+		this.log('warning', message);
+	},
+	error(message: string): void {
+		this.log('error', message);
+	},
 
 	clear(): void {
 		if (this.logElement) {
 			this.logElement.innerHTML = '';
 		}
 		this.log('info', '日志已清空');
-	}
+	},
 };
 
 // ==================== 初始化 ====================
 
 document.addEventListener('DOMContentLoaded', () => {
 	DebugLog.init();
-	DebugLog.info('DOMContentLoaded 事件触发');
-	
 	initModals();
-	DebugLog.info('模态框初始化完成');
-	
 	initEventListeners();
-	DebugLog.info('事件监听器初始化完成');
-	
-	DebugLog.info('页面初始化完成，等待用户操作');
+	DebugLog.info('页面初始化完成');
 });
 
 /**
@@ -126,20 +130,12 @@ function initModals(): void {
 		const pinMappingModalEl = document.getElementById('pinMappingModal');
 		const resultModalEl = document.getElementById('resultModal');
 
-		if (searchModalEl) {
-			searchModal = new bootstrap.Modal(searchModalEl);
-			DebugLog.info('搜索模态框创建成功');
-		}
-		if (pinMappingModalEl) {
-			pinMappingModal = new bootstrap.Modal(pinMappingModalEl);
-			DebugLog.info('引脚映射模态框创建成功');
-		}
-		if (resultModalEl) {
-			resultModal = new bootstrap.Modal(resultModalEl);
-			DebugLog.info('结果模态框创建成功');
-		}
-	}
-	catch (e) {
+		if (searchModalEl) searchModal = new bootstrap.Modal(searchModalEl);
+		if (pinMappingModalEl) pinMappingModal = new bootstrap.Modal(pinMappingModalEl);
+		if (resultModalEl) resultModal = new bootstrap.Modal(resultModalEl);
+
+		DebugLog.info('模态框初始化完成');
+	} catch (e) {
 		DebugLog.error(`模态框初始化失败: ${e}`);
 	}
 }
@@ -148,101 +144,58 @@ function initModals(): void {
  * 初始化事件监听
  */
 function initEventListeners(): void {
-	// 调试面板折叠
-	const debugHeader = document.getElementById('debugHeader');
-	if (debugHeader) {
-		debugHeader.addEventListener('click', () => {
-			const content = document.getElementById('debugContent');
-			const toggle = document.getElementById('debugToggle');
-			if (content && toggle) {
-				content.classList.toggle('show');
-				toggle.textContent = content.classList.contains('show') ? '▼ 收起' : '▶ 展开';
-			}
-		});
-	}
-
 	// 清空日志
-	const clearLogBtn = document.getElementById('clearLogBtn');
-	if (clearLogBtn) {
-		clearLogBtn.addEventListener('click', () => DebugLog.clear());
-	}
+	document.getElementById('clearLogBtn')?.addEventListener('click', () => DebugLog.clear());
 
 	// 刷新按钮
-	const refreshBtn = document.getElementById('refreshBtn');
-	if (refreshBtn) {
-		refreshBtn.addEventListener('click', () => {
-			DebugLog.info('点击了刷新列表按钮');
-			loadAllComponents();
-		});
-	}
+	document.getElementById('refreshBtn')?.addEventListener('click', () => loadAllComponents());
 
 	// 清空选择按钮
-	const clearSelectionBtn = document.getElementById('clearSelectionBtn');
-	if (clearSelectionBtn) {
-		clearSelectionBtn.addEventListener('click', () => {
-			DebugLog.info('点击了清空选择按钮');
-			clearSelection();
-		});
-	}
+	document.getElementById('clearSelectionBtn')?.addEventListener('click', () => clearSelection());
 
 	// 全选复选框
-	const selectAll = document.getElementById('selectAll') as HTMLInputElement;
-	if (selectAll) {
-		selectAll.addEventListener('change', handleSelectAll);
-	}
+	(document.getElementById('selectAll') as HTMLInputElement)?.addEventListener('change', handleSelectAll);
 
 	// 筛选输入框
-	const filterInput = document.getElementById('filterInput') as HTMLInputElement;
-	if (filterInput) {
-		filterInput.addEventListener('input', handleFilter);
-	}
+	(document.getElementById('filterInput') as HTMLInputElement)?.addEventListener('input', handleFilter);
 
 	// 选择新元件按钮
-	const selectNewComponentBtn = document.getElementById('selectNewComponentBtn');
-	if (selectNewComponentBtn) {
-		selectNewComponentBtn.addEventListener('click', () => {
-			DebugLog.info('点击了选择新元件按钮');
-			openSearchModal();
-		});
-	}
+	document.getElementById('selectNewComponentBtn')?.addEventListener('click', openSearchModal);
 
-	// 新元件搜索
-	const newComponentSearch = document.getElementById('newComponentSearch') as HTMLInputElement;
-	if (newComponentSearch) {
-		newComponentSearch.addEventListener('keypress', (e) => {
-			if (e.key === 'Enter') {
-				DebugLog.info(`搜索关键词: ${newComponentSearch.value}`);
-				searchNewComponents();
-			}
-		});
-	}
+	// 搜索相关事件
+	document.getElementById('searchBtn')?.addEventListener('click', searchNewComponents);
+	document.getElementById('clearSearchBtn')?.addEventListener('click', clearSearchResults);
+	document.getElementById('clearSelectedBtn')?.addEventListener('click', clearSelectedComponent);
+
+	// 搜索输入框回车
+	(document.getElementById('newComponentSearch') as HTMLInputElement)?.addEventListener('keypress', (e) => {
+		if (e.key === 'Enter') searchNewComponents();
+	});
+
+	// 排序按钮
+	document.getElementById('sortPriceBtn')?.addEventListener('click', () => handleSort('price-asc'));
+	document.getElementById('sortInventoryBtn')?.addEventListener('click', () => handleSort('inventory-desc'));
+	document.getElementById('sortPinsBtn')?.addEventListener('click', () => handleSort('pins-asc'));
+
+	// 筛选下拉框
+	(document.getElementById('filterManufacturer') as HTMLSelectElement)?.addEventListener('change', (e) => {
+		filterManufacturer = (e.target as HTMLSelectElement).value;
+		renderSearchResults();
+	});
+
+	(document.getElementById('filterFootprint') as HTMLSelectElement)?.addEventListener('change', (e) => {
+		filterFootprint = (e.target as HTMLSelectElement).value;
+		renderSearchResults();
+	});
 
 	// 确认选择新元件
-	const confirmNewComponentBtn = document.getElementById('confirmNewComponentBtn');
-	if (confirmNewComponentBtn) {
-		confirmNewComponentBtn.addEventListener('click', () => {
-			DebugLog.info('确认选择新元件');
-			confirmNewComponentSelection();
-		});
-	}
+	document.getElementById('confirmNewComponentBtn')?.addEventListener('click', confirmNewComponentSelection);
 
 	// 执行替换按钮
-	const executeReplaceBtn = document.getElementById('executeReplaceBtn');
-	if (executeReplaceBtn) {
-		executeReplaceBtn.addEventListener('click', () => {
-			DebugLog.info('点击了执行替换按钮');
-			openPinMappingModal();
-		});
-	}
+	document.getElementById('executeReplaceBtn')?.addEventListener('click', openPinMappingModal);
 
 	// 确认替换按钮
-	const confirmReplaceBtn = document.getElementById('confirmReplaceBtn');
-	if (confirmReplaceBtn) {
-		confirmReplaceBtn.addEventListener('click', () => {
-			DebugLog.info('确认执行替换');
-			executeReplace();
-		});
-	}
+	document.getElementById('confirmReplaceBtn')?.addEventListener('click', executeReplace);
 }
 
 /**
@@ -250,15 +203,15 @@ function initEventListeners(): void {
  */
 function showToast(msg: string, type: 'success' | 'error' | 'warning' | 'info' = 'info'): void {
 	if (edaApi?.sys_Message) {
-		const t = {
-			success: (window as any).ESYS_ToastMessageType?.SUCCESS,
-			error: (window as any).ESYS_ToastMessageType?.ERROR,
-			warning: (window as any).ESYS_ToastMessageType?.WARNING,
-		}[type] || (window as any).ESYS_ToastMessageType?.INFO;
+		const t =
+			{
+				success: (window as any).ESYS_ToastMessageType?.SUCCESS,
+				error: (window as any).ESYS_ToastMessageType?.ERROR,
+				warning: (window as any).ESYS_ToastMessageType?.WARNING,
+			}[type] || (window as any).ESYS_ToastMessageType?.INFO;
 		try {
 			edaApi.sys_Message.showToastMessage(msg, t, 3);
-		}
-		catch (e) {
+		} catch (e) {
 			console.error('Toast failed:', e);
 		}
 	}
@@ -268,19 +221,15 @@ function showToast(msg: string, type: 'success' | 'error' | 'warning' | 'info' =
  * 读取状态属性（优先方法，其次字段）
  */
 function readState<T>(target: unknown, methodName: string, fieldNames: string[]): T | undefined {
-	if (!target || typeof target !== 'object')
-		return undefined;
-	
-	// 尝试方法
+	if (!target || typeof target !== 'object') return undefined;
+
 	const method = (target as Record<string, unknown>)[methodName];
 	if (typeof method === 'function') {
 		try {
 			return (method as () => T).call(target);
-		}
-		catch {}
+		} catch {}
 	}
-	
-	// 尝试字段
+
 	for (const fieldName of fieldNames) {
 		if (fieldName in (target as Record<string, unknown>)) {
 			return (target as Record<string, T | undefined>)[fieldName];
@@ -290,283 +239,234 @@ function readState<T>(target: unknown, methodName: string, fieldNames: string[])
 }
 
 /**
- * 加载所有元件 - 直接使用 EDA API
+ * 格式化价格
  */
+function formatPrice(price?: number): string {
+	if (price === undefined || price === null) return '-';
+	return `¥${price.toFixed(2)}`;
+}
+
+/**
+ * 格式化库存
+ */
+function formatInventory(inventory?: number): string {
+	if (inventory === undefined || inventory === null) return '-';
+	if (inventory >= 10000) return `${(inventory / 10000).toFixed(1)}万`;
+	return String(inventory);
+}
+
+// ==================== 元件列表加载 ====================
+
+/**
+ * 检查是否为真实元件
+ */
+function isRealComponent(comp: unknown): boolean {
+	const primitiveType = readState<string>(comp, 'getState_PrimitiveType', ['primitiveType']);
+	const componentType = readState<string>(comp, 'getState_ComponentType', ['componentType']);
+	return (
+		primitiveType === (window as any).ESCH_PrimitiveType?.COMPONENT && componentType === (window as any).ESCH_PrimitiveComponentType?.COMPONENT
+	);
+}
+
+/**
+ * 从元件对象提取名称
+ */
+function extractComponentName(comp: unknown): string {
+	if (comp && typeof comp === 'object' && 'manufacturerId' in comp) {
+		const manufacturerId = (comp as Record<string, unknown>).manufacturerId;
+		if (typeof manufacturerId === 'string') return manufacturerId;
+	}
+	return readState<string>(comp, 'getState_Name', ['name']) || '未知';
+}
+
+/**
+ * 处理单个元件并返回元件信息
+ */
+async function processComponent(comp: unknown): Promise<ComponentItem | null> {
+	const primitiveId = readState<string>(comp, 'getState_PrimitiveId', ['primitiveId']) || '';
+	if (!primitiveId) return null;
+
+	const designator = readState<string>(comp, 'getState_Designator', ['designator']) || '?';
+	const name = extractComponentName(comp);
+	const componentInfo = readState<{ libraryUuid: string; uuid: string }>(comp, 'getState_Component', ['component']);
+	const footprintInfo = readState<{ libraryUuid: string; uuid: string }>(comp, 'getState_Footprint', ['footprint']);
+	const manufacturer = readState<string>(comp, 'getState_Manufacturer', ['manufacturer']);
+
+	let pinCount = 0;
+	try {
+		const pins = await edaApi.sch_PrimitiveComponent.getAllPinsByPrimitiveId(primitiveId);
+		pinCount = pins?.length || 0;
+	} catch {
+		/* ignore */
+	}
+
+	return {
+		primitiveId,
+		designator,
+		name,
+		footprint: footprintInfo?.uuid || '-',
+		libraryUuid: componentInfo?.libraryUuid || '',
+		componentUuid: componentInfo?.uuid || '',
+		manufacturer: manufacturer || undefined,
+		pinCount,
+	};
+}
+
+/**
+ * 处理单个页面的元件
+ */
+async function processPageComponents(page: { uuid: string }): Promise<ComponentItem[]> {
+	const components: ComponentItem[] = [];
+	try {
+		await edaApi.dmt_EditorControl.openDocument(page.uuid);
+		await new Promise<void>((resolve) => {
+			setTimeout(resolve, 100);
+		});
+
+		const comps = await edaApi.sch_PrimitiveComponent.getAll();
+
+		for (const comp of comps || []) {
+			if (!isRealComponent(comp)) continue;
+			const componentItem = await processComponent(comp);
+			if (componentItem) components.push(componentItem);
+		}
+	} catch (e) {
+		DebugLog.warning(`扫描图页失败: ${e}`);
+	}
+	return components;
+}
+
 async function loadAllComponents(): Promise<void> {
 	DebugLog.info('开始加载元件列表...');
-	
+
 	const tbody = document.getElementById('componentListBody');
 	const totalCount = document.getElementById('totalCount');
 
-	if (!tbody) {
-		DebugLog.error('找不到 componentListBody 元素');
-		return;
-	}
+	if (!tbody) return;
 
 	tbody.innerHTML = `
 		<tr>
 			<td colspan="4" class="text-center">
-				<div class="loading">
-					<div class="loading-spinner"></div>
-					<div class="mt-2">加载中...</div>
-				</div>
+				<div class="loading"><div class="loading-spinner"></div><div class="mt-2">加载中...</div></div>
 			</td>
 		</tr>
 	`;
 
-	// 检查 EDA API 是否可用
 	if (!edaApi) {
-		DebugLog.error('EDA API 不可用，eda 对象未定义');
-		tbody.innerHTML = `
-			<tr>
-				<td colspan="4" class="text-center text-danger">EDA API 不可用</td>
-			</tr>
-		`;
+		tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">EDA API 不可用</td></tr>';
 		return;
 	}
 
-	DebugLog.info('EDA API 可用，开始获取元件...');
-
 	try {
-		// 检查当前文档是否为原理图
 		const currentDoc = await edaApi.dmt_SelectControl.getCurrentDocumentInfo();
-		DebugLog.info(`当前文档类型: ${currentDoc?.documentType}`);
-		
 		if (!currentDoc || currentDoc.documentType !== 1) {
-			DebugLog.warning('当前文档不是原理图');
-			tbody.innerHTML = `
-				<tr>
-					<td colspan="4" class="text-center text-muted">当前文档不是原理图，请打开原理图后再试</td>
-				</tr>
-			`;
+			tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">当前文档不是原理图</td></tr>';
 			showToast('请先打开原理图文档', 'warning');
 			return;
 		}
 
-		// 获取所有图页
 		const allPages = await edaApi.dmt_Schematic.getCurrentSchematicAllSchematicPagesInfo();
-		DebugLog.info(`找到 ${allPages?.length || 0} 个图页`);
-		
 		if (!allPages || allPages.length === 0) {
-			tbody.innerHTML = `
-				<tr>
-					<td colspan="4" class="text-center text-muted">未找到图页</td>
-				</tr>
-			`;
+			tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">未找到图页</td></tr>';
 			return;
 		}
 
-		// 获取当前图页 UUID（用于恢复）
 		const currentPage = await edaApi.dmt_Schematic.getCurrentSchematicPageInfo();
 		const originalPageUuid = currentPage?.uuid;
-		DebugLog.info(`当前图页: ${currentPage?.name || '未知'}`);
 
 		allComponents = [];
 
-		// 遍历所有图页
-		for (let i = 0; i < allPages.length; i++) {
-			const page = allPages[i];
-			DebugLog.info(`正在扫描图页 ${i + 1}/${allPages.length}: ${page.name}`);
-			
-			try {
-				// 切换到该图页
-				await edaApi.dmt_EditorControl.openDocument(page.uuid);
-				await new Promise(r => setTimeout(r, 100));
-
-				// 获取该图页的所有元件
-				const comps = await edaApi.sch_PrimitiveComponent.getAll();
-				DebugLog.info(`图页 ${page.name} 找到 ${comps?.length || 0} 个元件`);
-
-				for (const comp of comps || []) {
-					try {
-						// 过滤：只保留真正的元件（排除图纸等）
-						const primitiveType = readState<string>(comp, 'getState_PrimitiveType', ['primitiveType']);
-						const componentType = readState<string>(comp, 'getState_ComponentType', ['componentType']);
-
-						// 检查是否为真正的元件
-						const isRealComponent = primitiveType === (window as any).ESCH_PrimitiveType?.COMPONENT
-							&& componentType === (window as any).ESCH_PrimitiveComponentType?.COMPONENT;
-
-						if (!isRealComponent) {
-							DebugLog.info(`跳过非元件对象: primitiveType=${primitiveType}, componentType=${componentType}`);
-							continue;
-						}
-
-						const primitiveId = readState<string>(comp, 'getState_PrimitiveId', ['primitiveId']) || '';
-						if (!primitiveId) continue;
-
-						const designator = readState<string>(comp, 'getState_Designator', ['designator']) || '?';
-						
-						// 优先使用 manufacturerId（元件型号）
-						let name = '';
-						if (comp && typeof comp === 'object' && 'manufacturerId' in comp) {
-							const manufacturerId = (comp as Record<string, unknown>).manufacturerId;
-							if (typeof manufacturerId === 'string') {
-								name = manufacturerId;
-							}
-						}
-						if (!name) {
-							name = readState<string>(comp, 'getState_Name', ['name']) || '未知';
-						}
-
-						const componentInfo = readState<{ libraryUuid: string; uuid: string }>(comp, 'getState_Component', ['component']);
-						const footprintInfo = readState<{ libraryUuid: string; uuid: string }>(comp, 'getState_Footprint', ['footprint']);
-						const manufacturer = readState<string>(comp, 'getState_Manufacturer', ['manufacturer']);
-
-						// 获取引脚数量
-						let pinCount = 0;
-						try {
-							const pins = await edaApi.sch_PrimitiveComponent.getAllPinsByPrimitiveId(primitiveId);
-							pinCount = pins?.length || 0;
-						}
-						catch {}
-
-						allComponents.push({
-							primitiveId,
-							designator,
-							name,
-							footprint: footprintInfo?.uuid || '-',
-							libraryUuid: componentInfo?.libraryUuid || '',
-							componentUuid: componentInfo?.uuid || '',
-							manufacturer: manufacturer || undefined,
-							pinCount,
-						});
-					}
-					catch (e) {
-						DebugLog.warning(`解析元件失败: ${e}`);
-					}
-				}
-			}
-			catch (e) {
-				DebugLog.warning(`扫描图页 ${page.name} 失败: ${e}`);
-			}
+		for (const page of allPages) {
+			const pageComponents = await processPageComponents(page);
+			allComponents.push(...pageComponents);
 		}
 
-		// 恢复到原来的图页
 		if (originalPageUuid) {
 			try {
 				await edaApi.dmt_EditorControl.openDocument(originalPageUuid);
+			} catch {
+				/* ignore */
 			}
-			catch {}
 		}
 
-		DebugLog.success(`成功加载 ${allComponents.length} 个元件`);
 		renderComponentList(allComponents);
-		
-		if (totalCount) {
-			totalCount.textContent = String(allComponents.length);
-		}
-		
+		if (totalCount) totalCount.textContent = String(allComponents.length);
 		showToast(`加载完成: ${allComponents.length} 个元件`, 'success');
-	}
-	catch (error) {
+	} catch (error) {
 		const errorMsg = error instanceof Error ? error.message : String(error);
-		DebugLog.error(`加载失败: ${errorMsg}`);
-		tbody.innerHTML = `
-			<tr>
-				<td colspan="4" class="text-center text-danger">
-					加载失败: ${errorMsg}
-				</td>
-			</tr>
-		`;
+		tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">加载失败: ${errorMsg}</td></tr>`;
 		showToast(`加载失败: ${errorMsg}`, 'error');
 	}
 }
 
-/**
- * 渲染元件列表
- */
 function renderComponentList(components: ComponentItem[]): void {
 	const tbody = document.getElementById('componentListBody');
-	if (!tbody) {
-		DebugLog.error('找不到 componentListBody');
-		return;
-	}
+	if (!tbody) return;
 
 	if (components.length === 0) {
-		tbody.innerHTML = `
-			<tr>
-				<td colspan="4" class="text-center text-muted">暂无元件</td>
-			</tr>
-		`;
+		tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">暂无元件</td></tr>';
 		return;
 	}
 
-	tbody.innerHTML = components.map(comp => `
+	tbody.innerHTML = components
+		.map(
+			(comp) => `
 		<tr data-primitive-id="${comp.primitiveId}">
 			<td>${comp.designator || '?'}</td>
 			<td>${comp.name || '-'}</td>
 			<td>${comp.footprint || '-'}</td>
 			<td class="text-center">
-				<input type="checkbox" class="component-checkbox"
-					data-primitive-id="${comp.primitiveId}"
-					${selectedComponents.some(s => s.primitiveId === comp.primitiveId) ? 'checked' : ''}>
+				<input type="checkbox" class="component-checkbox" data-primitive-id="${comp.primitiveId}"
+					${selectedComponents.some((s) => s.primitiveId === comp.primitiveId) ? 'checked' : ''}>
 			</td>
 		</tr>
-	`).join('');
+	`,
+		)
+		.join('');
 
-	// 绑定复选框事件
-	const checkboxes = tbody.querySelectorAll('.component-checkbox');
-	checkboxes.forEach(checkbox => {
+	tbody.querySelectorAll('.component-checkbox').forEach((checkbox) => {
 		checkbox.addEventListener('change', handleComponentSelect);
 	});
-	
-	DebugLog.info(`渲染了 ${components.length} 个元件行`);
 }
 
-/**
- * 处理元件选择
- */
 function handleComponentSelect(event: Event): void {
 	const checkbox = event.target as HTMLInputElement;
 	const primitiveId = checkbox.dataset.primitiveId;
 	const row = checkbox.closest('tr');
-
 	if (!primitiveId) return;
 
-	const component = allComponents.find(c => c.primitiveId === primitiveId);
+	const component = allComponents.find((c) => c.primitiveId === primitiveId);
 	if (!component) return;
 
 	if (checkbox.checked) {
-		if (!selectedComponents.some(s => s.primitiveId === primitiveId)) {
+		if (!selectedComponents.some((s) => s.primitiveId === primitiveId)) {
 			selectedComponents.push(component);
 		}
-		if (row) row.classList.add('selected-row');
-		DebugLog.info(`选中元件: ${component.designator}`);
-	}
-	else {
-		selectedComponents = selectedComponents.filter(s => s.primitiveId !== primitiveId);
-		if (row) row.classList.remove('selected-row');
-		DebugLog.info(`取消选中: ${component.designator}`);
+		row?.classList.add('selected-row');
+	} else {
+		selectedComponents = selectedComponents.filter((s) => s.primitiveId !== primitiveId);
+		row?.classList.remove('selected-row');
 	}
 
 	renderSelectedList();
 	updateButtonStates();
 }
 
-/**
- * 渲染已选中列表
- */
 function renderSelectedList(): void {
 	const tbody = document.getElementById('selectedListBody');
 	const selectedCount = document.getElementById('selectedCount');
 
+	if (selectedCount) selectedCount.textContent = String(selectedComponents.length);
 	if (!tbody) return;
 
-	if (selectedCount) {
-		selectedCount.textContent = String(selectedComponents.length);
-	}
-
 	if (selectedComponents.length === 0) {
-		tbody.innerHTML = `
-			<tr>
-				<td colspan="3" class="text-center text-muted">暂无选中</td>
-			</tr>
-		`;
+		tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">暂无选中</td></tr>';
 		return;
 	}
 
-	tbody.innerHTML = selectedComponents.map(comp => `
+	tbody.innerHTML = selectedComponents
+		.map(
+			(comp) => `
 		<tr>
 			<td>${comp.designator || '?'}</td>
 			<td>${comp.name || '-'}</td>
@@ -576,59 +476,52 @@ function renderSelectedList(): void {
 				</button>
 			</td>
 		</tr>
-	`).join('');
+	`,
+		)
+		.join('');
 
-	const removeBtns = tbody.querySelectorAll('.remove-btn');
-	removeBtns.forEach(btn => {
+	tbody.querySelectorAll('.remove-btn').forEach((btn) => {
 		btn.addEventListener('click', handleRemoveComponent);
 	});
 }
 
-/**
- * 处理移除元件
- */
 function handleRemoveComponent(event: Event): void {
 	const btn = event.currentTarget as HTMLButtonElement;
 	const primitiveId = btn.dataset.primitiveId;
 	if (!primitiveId) return;
 
-	selectedComponents = selectedComponents.filter(s => s.primitiveId !== primitiveId);
+	selectedComponents = selectedComponents.filter((s) => s.primitiveId !== primitiveId);
 
 	const checkbox = document.querySelector(`.component-checkbox[data-primitive-id="${primitiveId}"]`) as HTMLInputElement;
 	if (checkbox) {
 		checkbox.checked = false;
-		const row = checkbox.closest('tr');
-		if (row) row.classList.remove('selected-row');
+		checkbox.closest('tr')?.classList.remove('selected-row');
 	}
 
 	renderSelectedList();
 	updateButtonStates();
 }
 
-/**
- * 处理全选
- */
 function handleSelectAll(event: Event): void {
 	const selectAllCheckbox = event.target as HTMLInputElement;
 	const checkboxes = document.querySelectorAll('.component-checkbox') as NodeListOf<HTMLInputElement>;
 
-	checkboxes.forEach(checkbox => {
+	checkboxes.forEach((checkbox) => {
 		checkbox.checked = selectAllCheckbox.checked;
 		const primitiveId = checkbox.dataset.primitiveId;
 		const row = checkbox.closest('tr');
 
 		if (primitiveId) {
-			const component = allComponents.find(c => c.primitiveId === primitiveId);
+			const component = allComponents.find((c) => c.primitiveId === primitiveId);
 			if (component) {
 				if (selectAllCheckbox.checked) {
-					if (!selectedComponents.some(s => s.primitiveId === primitiveId)) {
+					if (!selectedComponents.some((s) => s.primitiveId === primitiveId)) {
 						selectedComponents.push(component);
 					}
-					if (row) row.classList.add('selected-row');
-				}
-				else {
-					selectedComponents = selectedComponents.filter(s => s.primitiveId !== primitiveId);
-					if (row) row.classList.remove('selected-row');
+					row?.classList.add('selected-row');
+				} else {
+					selectedComponents = selectedComponents.filter((s) => s.primitiveId !== primitiveId);
+					row?.classList.remove('selected-row');
 				}
 			}
 		}
@@ -636,12 +529,8 @@ function handleSelectAll(event: Event): void {
 
 	renderSelectedList();
 	updateButtonStates();
-	DebugLog.info(selectAllCheckbox.checked ? '全选所有元件' : '取消全选');
 }
 
-/**
- * 处理筛选
- */
 function handleFilter(event: Event): void {
 	const input = event.target as HTMLInputElement;
 	const keyword = input.value.toLowerCase().trim();
@@ -651,80 +540,74 @@ function handleFilter(event: Event): void {
 		return;
 	}
 
-	const filtered = allComponents.filter(comp =>
-		(comp.designator || '').toLowerCase().includes(keyword) ||
-		(comp.name || '').toLowerCase().includes(keyword) ||
-		(comp.footprint || '').toLowerCase().includes(keyword)
+	const filtered = allComponents.filter(
+		(comp) =>
+			(comp.designator || '').toLowerCase().includes(keyword) ||
+			(comp.name || '').toLowerCase().includes(keyword) ||
+			(comp.footprint || '').toLowerCase().includes(keyword),
 	);
 
 	renderComponentList(filtered);
 }
 
-/**
- * 清空选择
- */
 function clearSelection(): void {
 	selectedComponents = [];
 	selectedNewComponent = null;
 
-	const checkboxes = document.querySelectorAll('.component-checkbox') as NodeListOf<HTMLInputElement>;
-	checkboxes.forEach(checkbox => {
-		checkbox.checked = false;
-		const row = checkbox.closest('tr');
-		if (row) row.classList.remove('selected-row');
+	document.querySelectorAll('.component-checkbox').forEach((checkbox) => {
+		(checkbox as HTMLInputElement).checked = false;
+		checkbox.closest('tr')?.classList.remove('selected-row');
 	});
 
-	const selectAll = document.getElementById('selectAll') as HTMLInputElement;
-	if (selectAll) selectAll.checked = false;
+	(document.getElementById('selectAll') as HTMLInputElement).checked = false;
 
 	renderSelectedList();
 	clearComparePanel();
 	updateButtonStates();
-	DebugLog.info('已清空所有选择');
 }
 
-/**
- * 清空对比面板
- */
 function clearComparePanel(): void {
-	const fields = ['Model', 'Footprint', 'Pins', 'Manufacturer', 'Supplier'];
-	fields.forEach(field => {
+	['Model', 'Footprint', 'Pins', 'Manufacturer', 'Price', 'Inventory'].forEach((field) => {
 		const oldEl = document.getElementById(`old${field}`);
 		const newEl = document.getElementById(`new${field}`);
 		if (oldEl) oldEl.textContent = '-';
 		if (newEl) newEl.textContent = '-';
 	});
+
+	const priceChange = document.getElementById('priceChange');
+	if (priceChange) priceChange.innerHTML = '';
 }
 
-/**
- * 更新按钮状态
- */
 function updateButtonStates(): void {
 	const selectNewComponentBtn = document.getElementById('selectNewComponentBtn') as HTMLButtonElement;
 	const executeReplaceBtn = document.getElementById('executeReplaceBtn') as HTMLButtonElement;
 
-	if (selectNewComponentBtn) {
-		selectNewComponentBtn.disabled = selectedComponents.length === 0;
-	}
-
-	if (executeReplaceBtn) {
-		executeReplaceBtn.disabled = selectedComponents.length === 0 || !selectedNewComponent;
-	}
+	if (selectNewComponentBtn) selectNewComponentBtn.disabled = selectedComponents.length === 0;
+	if (executeReplaceBtn) executeReplaceBtn.disabled = selectedComponents.length === 0 || !selectedNewComponent;
 }
 
-/**
- * 打开搜索模态框
- */
+// ==================== 搜索功能 ====================
+
 function openSearchModal(): void {
-	if (searchModal) {
-		searchModal.show();
-		DebugLog.info('打开搜索模态框');
-	}
+	// 重置搜索状态
+	searchResults = [];
+	selectedNewComponent = null;
+	filterManufacturer = '';
+	filterFootprint = '';
+
+	// 重置UI
+	(document.getElementById('newComponentSearch') as HTMLInputElement).value = '';
+	(document.getElementById('filterManufacturer') as HTMLSelectElement).innerHTML = '<option value="">所有制造商</option>';
+	(document.getElementById('filterFootprint') as HTMLSelectElement).innerHTML = '<option value="">所有封装</option>';
+	document.getElementById('searchResultsBody').innerHTML = '<tr><td colspan="7" class="text-center text-muted">输入关键词搜索元件</td></tr>';
+	document.getElementById('searchResultCount').textContent = '0';
+	document.getElementById('lowestPrice').textContent = '-';
+	document.getElementById('selectedInfo').style.display = 'none';
+	(document.getElementById('confirmNewComponentBtn') as HTMLButtonElement).disabled = true;
+
+	searchModal?.show();
 }
 
-/**
- * 搜索新元件
- */
 async function searchNewComponents(): Promise<void> {
 	const searchInput = document.getElementById('newComponentSearch') as HTMLInputElement;
 	const tbody = document.getElementById('searchResultsBody');
@@ -733,164 +616,310 @@ async function searchNewComponents(): Promise<void> {
 
 	const keyword = searchInput.value.trim();
 	if (!keyword) {
-		tbody.innerHTML = `
-			<tr>
-				<td colspan="5" class="text-center text-muted">输入关键词搜索元件</td>
-			</tr>
-		`;
+		tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">输入关键词搜索元件</td></tr>';
 		return;
 	}
 
 	DebugLog.info(`搜索元件: ${keyword}`);
-	tbody.innerHTML = `
-		<tr>
-			<td colspan="5" class="text-center">
-				<div class="loading">
-					<div class="loading-spinner"></div>
-				</div>
-			</td>
-		</tr>
-	`;
+	tbody.innerHTML = '<tr><td colspan="7" class="text-center"><div class="loading"><div class="loading-spinner"></div></div></td></tr>';
 
 	try {
-		const results = await edaApi.lib_Device.search({
-			keyword: keyword.trim(),
-		});
-
+		// API: lib_Device.search(key, libraryUuid?, classification?, symbolType?, itemsOfPage?, page?)
+		// 第一个参数是字符串 key，不是对象
+		const results = await edaApi.lib_Device.search(keyword.trim());
 		DebugLog.info(`搜索返回 ${results?.length || 0} 个结果`);
 
 		if (!results || results.length === 0) {
-			tbody.innerHTML = `
-				<tr>
-					<td colspan="5" class="text-center text-muted">未找到匹配的元件</td>
-				</tr>
-			`;
+			tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">未找到匹配的元件</td></tr>';
 			return;
 		}
 
-		tbody.innerHTML = results.slice(0, 50).map((r: any, index: number) => `
-			<tr class="search-result-row" data-index="${index}">
-				<td>${r.name || '-'}</td>
-				<td>${r.footprint?.name || '-'}</td>
+		// 转换结果
+		searchResults = results.map((r: any) => ({
+			uuid: r.uuid,
+			libraryUuid: r.libraryUuid || '',
+			name: r.name || '',
+			footprint: r.footprint?.name || r.footprintName || '',
+			manufacturer: r.manufacturer || '',
+			description: r.description || '',
+			pinCount: r.pinCount,
+			jlcPrice: r.jlcPrice,
+			lcscPrice: r.lcscPrice,
+			jlcInventory: r.jlcInventory,
+			lcscInventory: r.lcscInventory,
+			supplier: r.supplier,
+			supplierId: r.supplierId,
+		}));
+
+		// 更新筛选下拉框
+		updateFilterOptions();
+
+		// 默认按价格升序排序
+		sortResults('price-asc');
+		renderSearchResults();
+
+		DebugLog.success(`搜索完成，共 ${searchResults.length} 个结果`);
+	} catch (error) {
+		// 改进错误处理
+		let errorMsg = '未知错误';
+		if (error instanceof Error) {
+			errorMsg = error.message;
+		} else if (typeof error === 'string') {
+			errorMsg = error;
+		} else if (error && typeof error === 'object') {
+			errorMsg = JSON.stringify(error);
+		}
+		DebugLog.error(`搜索失败: ${errorMsg}`);
+		tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">搜索失败: ${errorMsg}</td></tr>`;
+	}
+}
+
+function updateFilterOptions(): void {
+	// 提取唯一的制造商列表
+	const manufacturers = [...new Set(searchResults.map((r) => r.manufacturer).filter(Boolean))];
+	const manufacturerSelect = document.getElementById('filterManufacturer') as HTMLSelectElement;
+	if (manufacturerSelect) {
+		manufacturerSelect.innerHTML =
+			'<option value="">所有制造商</option>' + manufacturers.map((m) => `<option value="${m}">${m}</option>`).join('');
+	}
+
+	// 提取唯一的封装列表
+	const footprints = [...new Set(searchResults.map((r) => r.footprint).filter(Boolean))];
+	const footprintSelect = document.getElementById('filterFootprint') as HTMLSelectElement;
+	if (footprintSelect) {
+		footprintSelect.innerHTML = '<option value="">所有封装</option>' + footprints.map((f) => `<option value="${f}">${f}</option>`).join('');
+	}
+}
+
+function handleSort(sortType: SortType): void {
+	// 更新按钮状态
+	document.querySelectorAll('#searchModal .btn-group .btn').forEach((btn) => {
+		btn.classList.remove('btn-outline-phoenix', 'active');
+		btn.classList.add('btn-outline-secondary');
+	});
+
+	const activeBtn = document.querySelector(`[data-sort="${sortType}"]`);
+	if (activeBtn) {
+		activeBtn.classList.remove('btn-outline-secondary');
+		activeBtn.classList.add('btn-outline-phoenix', 'active');
+	}
+
+	sortResults(sortType);
+	renderSearchResults();
+}
+
+/**
+ * 获取排序比较函数
+ */
+function getCompareFn(sortType: SortType): (a: SearchResult, b: SearchResult) => number {
+	const getPrice = (r: SearchResult) => r.jlcPrice || r.lcscPrice;
+	const getInventory = (r: SearchResult) => r.jlcInventory || r.lcscInventory;
+
+	switch (sortType) {
+		case 'price-asc':
+			return (a, b) => (getPrice(a) ?? Infinity) - (getPrice(b) ?? Infinity);
+		case 'price-desc':
+			return (a, b) => (getPrice(b) ?? 0) - (getPrice(a) ?? 0);
+		case 'inventory-desc':
+			return (a, b) => (getInventory(b) ?? 0) - (getInventory(a) ?? 0);
+		case 'inventory-asc':
+			return (a, b) => (getInventory(a) ?? Infinity) - (getInventory(b) ?? Infinity);
+		case 'pins-asc':
+			return (a, b) => (a.pinCount ?? 0) - (b.pinCount ?? 0);
+		case 'pins-desc':
+			return (a, b) => (b.pinCount ?? 0) - (a.pinCount ?? 0);
+		default:
+			return () => 0;
+	}
+}
+
+function sortResults(sortType: SortType): void {
+	searchResults.sort(getCompareFn(sortType));
+}
+
+function renderSearchResults(): void {
+	const tbody = document.getElementById('searchResultsBody');
+	const resultCount = document.getElementById('searchResultCount');
+	const lowestPriceEl = document.getElementById('lowestPrice');
+
+	if (!tbody) return;
+
+	// 应用筛选
+	let filtered = searchResults;
+	if (filterManufacturer) {
+		filtered = filtered.filter((r) => r.manufacturer === filterManufacturer);
+	}
+	if (filterFootprint) {
+		filtered = filtered.filter((r) => r.footprint === filterFootprint);
+	}
+
+	// 更新统计
+	if (resultCount) resultCount.textContent = String(filtered.length);
+
+	// 计算最低价
+	const prices = filtered.map((r) => r.jlcPrice || r.lcscPrice).filter((p) => p !== undefined && p !== null) as number[];
+	if (lowestPriceEl) {
+		lowestPriceEl.textContent = prices.length > 0 ? formatPrice(Math.min(...prices)) : '-';
+	}
+
+	if (filtered.length === 0) {
+		tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">没有符合条件的结果</td></tr>';
+		return;
+	}
+
+	// 找出最低价索引用于高亮
+	const minPrice = prices.length > 0 ? Math.min(...prices) : null;
+
+	tbody.innerHTML = filtered
+		.map((r, index) => {
+			const price = r.jlcPrice || r.lcscPrice;
+			const inventory = r.jlcInventory || r.lcscInventory;
+			const isLowestPrice = price && price === minPrice;
+
+			return `
+			<tr class="search-result-row ${isLowestPrice ? 'table-success' : ''}" data-index="${index}">
+				<td>
+					${r.name || '-'}
+					${isLowestPrice ? '<span class="badge bg-success ms-1">最低价</span>' : ''}
+				</td>
+				<td>${r.footprint || '-'}</td>
+				<td class="${isLowestPrice ? 'text-success fw-bold' : ''}">${formatPrice(price)}</td>
+				<td>${formatInventory(inventory)}</td>
 				<td>${r.manufacturer || '-'}</td>
-				<td>${r.description || '-'}</td>
+				<td class="small text-truncate" style="max-width: 150px" title="${r.description || ''}">${r.description || '-'}</td>
 				<td class="text-center">
 					<input type="radio" name="searchResult" value="${index}">
 				</td>
 			</tr>
-		`).join('');
-
-		const rows = tbody.querySelectorAll('.search-result-row');
-		rows.forEach(row => {
-			row.addEventListener('click', () => {
-				const radio = row.querySelector('input[type="radio"]') as HTMLInputElement;
-				if (radio) {
-					radio.checked = true;
-					rows.forEach(r => r.classList.remove('highlight-row'));
-					row.classList.add('highlight-row');
-					const index = parseInt(radio.value);
-					const r = results[index];
-					selectedNewComponent = {
-						uuid: r.uuid,
-						libraryUuid: r.libraryUuid || '',
-						name: r.name || '',
-						footprint: r.footprint?.name,
-						manufacturer: r.manufacturer,
-						description: r.description,
-						pinCount: r.pinCount,
-					};
-					DebugLog.info(`选中搜索结果: ${selectedNewComponent.name}`);
-					const confirmBtn = document.getElementById('confirmNewComponentBtn') as HTMLButtonElement;
-					if (confirmBtn) confirmBtn.disabled = false;
-				}
-			});
-		});
-	}
-	catch (error) {
-		const errorMsg = error instanceof Error ? error.message : String(error);
-		DebugLog.error(`搜索失败: ${errorMsg}`);
-		tbody.innerHTML = `
-			<tr>
-				<td colspan="5" class="text-center text-danger">搜索失败: ${errorMsg}</td>
-			</tr>
 		`;
+		})
+		.join('');
+
+	// 绑定点击事件
+	tbody.querySelectorAll('.search-result-row').forEach((row) => {
+		row.addEventListener('click', () => selectSearchResult(row));
+	});
+}
+
+function selectSearchResult(row: HTMLElement): void {
+	const radio = row.querySelector('input[type="radio"]') as HTMLInputElement;
+	if (!radio) return;
+
+	radio.checked = true;
+
+	// 更新行样式
+	document.querySelectorAll('.search-result-row').forEach((r) => r.classList.remove('highlight-row'));
+	row.classList.add('highlight-row');
+
+	// 获取选中的结果
+	const index = parseInt(radio.value, 10);
+	const filteredResults = getFilteredResults();
+	const r = filteredResults[index];
+
+	if (r) {
+		selectedNewComponent = r;
+		DebugLog.info(`选中搜索结果: ${r.name}, 价格: ${formatPrice(r.jlcPrice || r.lcscPrice)}`);
+
+		// 更新已选信息面板
+		document.getElementById('selectedInfo').style.display = 'block';
+		document.getElementById('selectedName').textContent = r.name || '-';
+		document.getElementById('selectedFootprint').textContent = r.footprint || '-';
+		document.getElementById('selectedPrice').textContent = formatPrice(r.jlcPrice || r.lcscPrice);
+		document.getElementById('selectedPins').textContent = String(r.pinCount || '-');
+
+		(document.getElementById('confirmNewComponentBtn') as HTMLButtonElement).disabled = false;
 	}
 }
 
-/**
- * 确认新元件选择
- */
+function getFilteredResults(): SearchResult[] {
+	let filtered = searchResults;
+	if (filterManufacturer) {
+		filtered = filtered.filter((r) => r.manufacturer === filterManufacturer);
+	}
+	if (filterFootprint) {
+		filtered = filtered.filter((r) => r.footprint === filterFootprint);
+	}
+	return filtered;
+}
+
+function clearSearchResults(): void {
+	searchResults = [];
+	selectedNewComponent = null;
+	document.getElementById('searchResultsBody').innerHTML = '<tr><td colspan="7" class="text-center text-muted">输入关键词搜索元件</td></tr>';
+	document.getElementById('searchResultCount').textContent = '0';
+	document.getElementById('lowestPrice').textContent = '-';
+	document.getElementById('selectedInfo').style.display = 'none';
+	(document.getElementById('confirmNewComponentBtn') as HTMLButtonElement).disabled = true;
+}
+
+function clearSelectedComponent(): void {
+	selectedNewComponent = null;
+	document.querySelectorAll('.search-result-row').forEach((r) => r.classList.remove('highlight-row'));
+	document.querySelectorAll('input[name="searchResult"]').forEach((r) => {
+		(r as HTMLInputElement).checked = false;
+	});
+	document.getElementById('selectedInfo').style.display = 'none';
+	(document.getElementById('confirmNewComponentBtn') as HTMLButtonElement).disabled = true;
+}
+
 function confirmNewComponentSelection(): void {
 	if (!selectedNewComponent) return;
 
 	updateComparePanel();
-
-	if (searchModal) {
-		searchModal.hide();
-	}
-
+	searchModal?.hide();
 	updateButtonStates();
 	DebugLog.success(`已选择新元件: ${selectedNewComponent.name}`);
 }
 
-/**
- * 更新对比面板
- */
 function updateComparePanel(): void {
 	if (!selectedNewComponent || selectedComponents.length === 0) return;
 
 	const firstComponent = selectedComponents[0];
 
-	const oldModel = document.getElementById('oldModel');
-	const oldFootprint = document.getElementById('oldFootprint');
-	const oldPins = document.getElementById('oldPins');
-	const oldManufacturer = document.getElementById('oldManufacturer');
+	// 原值
+	document.getElementById('oldModel').textContent = firstComponent.name || '-';
+	document.getElementById('oldFootprint').textContent = firstComponent.footprint || '-';
+	document.getElementById('oldPins').textContent = String(firstComponent.pinCount || '-');
+	document.getElementById('oldManufacturer').textContent = firstComponent.manufacturer || '-';
+	document.getElementById('oldPrice').textContent = '-';
+	document.getElementById('oldInventory').textContent = '-';
 
-	if (oldModel) oldModel.textContent = firstComponent.name || '-';
-	if (oldFootprint) oldFootprint.textContent = firstComponent.footprint || '-';
-	if (oldPins) oldPins.textContent = String(firstComponent.pinCount || '-');
-	if (oldManufacturer) oldManufacturer.textContent = firstComponent.manufacturer || '-';
+	// 目标值
+	document.getElementById('newModel').textContent = selectedNewComponent.name || '-';
+	document.getElementById('newFootprint').textContent = selectedNewComponent.footprint || '-';
+	document.getElementById('newPins').textContent = String(selectedNewComponent.pinCount || '-');
+	document.getElementById('newManufacturer').textContent = selectedNewComponent.manufacturer || '-';
 
-	const newModel = document.getElementById('newModel');
-	const newFootprint = document.getElementById('newFootprint');
-	const newPins = document.getElementById('newPins');
-	const newManufacturer = document.getElementById('newManufacturer');
+	const price = selectedNewComponent.jlcPrice || selectedNewComponent.lcscPrice;
+	document.getElementById('newPrice').textContent = formatPrice(price);
 
-	if (newModel) newModel.textContent = selectedNewComponent.name || '-';
-	if (newFootprint) newFootprint.textContent = selectedNewComponent.footprint || '-';
-	if (newPins) newPins.textContent = String(selectedNewComponent.pinCount || '-');
-	if (newManufacturer) newManufacturer.textContent = selectedNewComponent.manufacturer || '-';
+	const inventory = selectedNewComponent.jlcInventory || selectedNewComponent.lcscInventory;
+	document.getElementById('newInventory').textContent = formatInventory(inventory);
+
+	// 价格变化指示
+	const priceChange = document.getElementById('priceChange');
+	if (priceChange) {
+		priceChange.innerHTML = price ? '<span class="badge bg-info">有报价</span>' : '';
+	}
 }
 
-/**
- * 打开引脚映射模态框
- */
+// ==================== 引脚映射和替换 ====================
+
 async function openPinMappingModal(): Promise<void> {
 	if (!selectedNewComponent || selectedComponents.length === 0) return;
 
 	const tbody = document.getElementById('pinMappingBody');
 	if (!tbody) return;
 
-	tbody.innerHTML = `
-		<tr>
-			<td colspan="7" class="text-center">
-				<div class="loading">
-					<div class="loading-spinner"></div>
-					<div class="mt-2">分析引脚映射中...</div>
-				</div>
-			</td>
-		</tr>
-	`;
+	tbody.innerHTML =
+		'<tr><td colspan="7" class="text-center"><div class="loading"><div class="loading-spinner"></div><div class="mt-2">分析引脚映射中...</div></div></td></tr>';
 
-	if (pinMappingModal) {
-		pinMappingModal.show();
-	}
+	pinMappingModal?.show();
 
 	try {
-		// 获取第一个元件的引脚信息
 		const firstComponent = selectedComponents[0];
 		const pins = await edaApi.sch_PrimitiveComponent.getAllPinsByPrimitiveId(firstComponent.primitiveId);
-		
+
 		const mappings: PinMapping[] = [];
 		for (const pin of pins || []) {
 			const pinNumber = readState<string>(pin, 'getState_PinNumber', ['pinNumber']) || '';
@@ -909,38 +938,24 @@ async function openPinMappingModal(): Promise<void> {
 
 		currentPinMappings = mappings;
 		renderPinMappings(currentPinMappings);
-		DebugLog.success(`引脚映射分析完成，共 ${mappings.length} 个引脚`);
-	}
-	catch (error) {
+	} catch (error) {
 		const errorMsg = error instanceof Error ? error.message : String(error);
-		DebugLog.error(`分析失败: ${errorMsg}`);
-		tbody.innerHTML = `
-			<tr>
-				<td colspan="7" class="text-center text-danger">
-					分析失败: ${errorMsg}
-				</td>
-			</tr>
-		`;
+		tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">分析失败: ${errorMsg}</td></tr>`;
 	}
 }
 
-/**
- * 渲染引脚映射
- */
 function renderPinMappings(mappings: PinMapping[]): void {
 	const tbody = document.getElementById('pinMappingBody');
 	if (!tbody) return;
 
 	if (mappings.length === 0) {
-		tbody.innerHTML = `
-			<tr>
-				<td colspan="7" class="text-center text-muted">暂无映射数据</td>
-			</tr>
-		`;
+		tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">暂无映射数据</td></tr>';
 		return;
 	}
 
-	tbody.innerHTML = mappings.map(m => `
+	tbody.innerHTML = mappings
+		.map(
+			(m) => `
 		<tr>
 			<td>${m.oldPinNumber}</td>
 			<td>${m.oldPinName}</td>
@@ -950,12 +965,11 @@ function renderPinMappings(mappings: PinMapping[]): void {
 			<td>${m.newPinName}</td>
 			<td><span class="match-badge match-${m.matchType}">${m.matchType}</span></td>
 		</tr>
-	`).join('');
+	`,
+		)
+		.join('');
 }
 
-/**
- * 执行替换
- */
 async function executeReplace(): Promise<void> {
 	if (!selectedNewComponent || selectedComponents.length === 0) return;
 
@@ -965,28 +979,19 @@ async function executeReplace(): Promise<void> {
 		confirmBtn.innerHTML = '<span class="loading-spinner"></span> 替换中...';
 	}
 
-	DebugLog.info(`开始执行替换，共 ${selectedComponents.length} 个元件`);
 	showToast(`正在替换 ${selectedComponents.length} 个元件...`, 'info');
 
 	try {
-		// 获取器件文件
-		const deviceFile = await edaApi.sys_FileManager.getDeviceFileByDeviceUuid(
-			selectedNewComponent.uuid,
-			selectedNewComponent.libraryUuid
-		);
+		const deviceFile = await edaApi.sys_FileManager.getDeviceFileByDeviceUuid(selectedNewComponent.uuid, selectedNewComponent.libraryUuid);
 
-		if (!deviceFile) {
-			throw new Error('无法获取新元件文件');
-		}
+		if (!deviceFile) throw new Error('无法获取新元件文件');
 
 		let reconnectedWires = 0;
 		let failedWires = 0;
 		const details: string[] = [];
 
-		// 逐个替换元件
 		for (const oldComp of selectedComponents) {
 			try {
-				// 获取原元件信息
 				const component = await edaApi.sch_PrimitiveComponent.get(oldComp.primitiveId);
 				if (!component) {
 					details.push(`${oldComp.designator}: 无法获取元件信息`);
@@ -1000,15 +1005,7 @@ async function executeReplace(): Promise<void> {
 				const mirror = readState<string>(component, 'getState_Mirror', ['mirror']) || '';
 				const designator = readState<string>(component, 'getState_Designator', ['designator']) || '';
 
-				// 创建新元件
-				const newComponent = await edaApi.sch_PrimitiveComponent.create(
-					deviceFile,
-					x,
-					y,
-					undefined,
-					rotation,
-					mirror
-				);
+				const newComponent = await edaApi.sch_PrimitiveComponent.create(deviceFile, x, y, undefined, rotation, mirror);
 
 				if (!newComponent) {
 					details.push(`${oldComp.designator}: 创建新元件失败`);
@@ -1016,53 +1013,40 @@ async function executeReplace(): Promise<void> {
 					continue;
 				}
 
-				// 设置位号
 				if (designator) {
 					await newComponent.setState_Designator(designator);
 					await newComponent.done();
 				}
 
-				// 删除原元件
 				await edaApi.sch_PrimitiveComponent.delete(oldComp.primitiveId);
 
 				reconnectedWires++;
 				details.push(`${oldComp.designator}: 替换成功`);
-			}
-			catch (e) {
+			} catch (e) {
 				details.push(`${oldComp.designator}: 替换失败 - ${e}`);
 				failedWires++;
 			}
 		}
 
-		const success = failedWires === 0;
-		const message = `替换完成: ${selectedComponents.length} 个元件`;
-
-		if (pinMappingModal) {
-			pinMappingModal.hide();
-		}
+		pinMappingModal?.hide();
 
 		showResult({
-			success,
-			message,
+			success: failedWires === 0,
+			message: `替换完成: ${selectedComponents.length} 个元件`,
 			reconnectedWires,
 			failedWires,
 			details,
 		});
-		
-		DebugLog.success(message);
-	}
-	catch (error) {
+	} catch (error) {
 		const errorMsg = error instanceof Error ? error.message : String(error);
-		DebugLog.error(`替换失败: ${errorMsg}`);
 		showResult({
 			success: false,
 			message: `替换失败: ${errorMsg}`,
 			reconnectedWires: 0,
 			failedWires: 0,
-			details: []
+			details: [],
 		});
-	}
-	finally {
+	} finally {
 		if (confirmBtn) {
 			confirmBtn.disabled = false;
 			confirmBtn.innerHTML = '确认替换';
@@ -1070,16 +1054,7 @@ async function executeReplace(): Promise<void> {
 	}
 }
 
-/**
- * 显示结果
- */
-function showResult(result: {
-	success: boolean;
-	message: string;
-	reconnectedWires: number;
-	failedWires: number;
-	details: string[];
-}): void {
+function showResult(result: { success: boolean; message: string; reconnectedWires: number; failedWires: number; details: string[] }): void {
 	const resultTitle = document.getElementById('resultTitle');
 	const resultBody = document.getElementById('resultBody');
 
@@ -1106,25 +1081,23 @@ function showResult(result: {
 					</div>
 				</div>
 			</div>
-			${result.details.length > 0 ? `
+			${
+				result.details.length > 0
+					? `
 				<div class="small text-muted">
 					<strong>详细信息:</strong>
 					<ul class="mt-1 mb-0 ps-3">
-						${result.details.slice(0, 5).map(d => `<li>${d}</li>`).join('')}
+						${result.details
+							.slice(0, 5)
+							.map((d) => `<li>${d}</li>`)
+							.join('')}
 					</ul>
 				</div>
-			` : ''}
+			`
+					: ''
+			}
 		`;
 	}
 
-	if (resultModal) {
-		resultModal.show();
-	}
-
-	if (result.success) {
-		setTimeout(() => {
-			clearSelection();
-			loadAllComponents();
-		}, 1000);
-	}
+	resultModal?.show();
 }
